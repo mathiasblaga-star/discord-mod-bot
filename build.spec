@@ -83,7 +83,6 @@ a = Analysis(
         'jinja2.ext',
         'aiosqlite',
         'dotenv',
-        'python_dotenv',
     ] + uvicorn_hidden + discord_hidden + aiohttp_hidden,
     hookspath=[],
     hooksconfig={},
