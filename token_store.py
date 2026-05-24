@@ -35,6 +35,11 @@ def _derive_key(password: str, salt: bytes) -> bytes:
 
 
 def _read_master_password() -> str:
+    # Allow non-interactive deployments (e.g. Railway) to supply the password
+    # via the MASTER_PASSWORD environment variable.
+    env_password = os.getenv("MASTER_PASSWORD")
+    if env_password:
+        return env_password
     if keyring is not None:
         try:
             stored = keyring.get_password(KEYRING_SERVICE, KEYRING_USER)
