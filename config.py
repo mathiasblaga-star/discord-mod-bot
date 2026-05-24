@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -23,8 +24,12 @@ MOD_ALERTS_CHANNEL_ID = _int_env("MOD_ALERTS_CHANNEL_ID")
 ADMIN_ROLE_ID = _int_env("ADMIN_ROLE_ID")
 MUTED_ROLE_ID = _int_env("MUTED_ROLE_ID")  # optional fallback if Discord timeouts fail
 
-# Database — absolute path so the bot finds it regardless of CWD.
-DB_PATH = str(Path(__file__).parent / "data" / "moderation.db")
+# Database — stored next to the exe when frozen so data survives restarts.
+# When running as a plain script, put it in the project root as before.
+if getattr(sys, "frozen", False):
+    DB_PATH = str(Path(sys.executable).parent / "data" / "moderation.db")
+else:
+    DB_PATH = str(Path(__file__).parent / "data" / "moderation.db")
 
 # --- Spam thresholds -----------------------------------------------------
 SPAM_MESSAGE_COUNT = 5          # messages within window

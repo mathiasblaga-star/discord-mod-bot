@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+import sys
+
 import local_config
 import shared_state
 from config import DB_PATH
@@ -29,7 +31,14 @@ from database import (
 SESSION_COOKIE = "dashboard_session"
 SESSION_MAX_AGE = 3600  # 1 hour
 
-BASE_DIR = Path(__file__).parent
+def _base_dir() -> Path:
+    """Return the dashboard package directory — works both frozen and as script."""
+    if getattr(sys, "frozen", False):
+        # PyInstaller extracts data files into sys._MEIPASS
+        return Path(sys._MEIPASS) / "dashboard"  # type: ignore[attr-defined]
+    return Path(__file__).parent
+
+BASE_DIR = _base_dir()
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
@@ -118,7 +127,7 @@ BOOL_FIELDS = {"block_invites", "block_phishing"}
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="Mod Bot Dashboard", docs_url=None, redoc_url=None)
-app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 _ALWAYS_PUBLIC = {"/login", "/logout", "/favicon.ico", "/setup", "/api/status", "/api/verify-token"}
 
