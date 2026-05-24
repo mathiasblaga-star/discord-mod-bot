@@ -1,5 +1,4 @@
 .env
-token.enc
 __pycache__/
 *.pyc
 *.db
