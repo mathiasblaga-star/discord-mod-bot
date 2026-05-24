@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup — Mod Bot</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="setup-wrap">
+    <div class="setup-card">
+
+        <div class="setup-header">
+            <div class="setup-logo">🤖</div>
+            <h1>ModBot Setup</h1>
+            <p class="subtitle">Get your bot running in under 2 minutes.<br>You only need to do this once.</p>
+        </div>
+
+        {% if error %}
+        <div class="error-banner">⚠️ {{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/setup" id="setup-form">
+
+            <!-- Step 1 -->
+            <div class="setup-section">
+                <div class="setup-step-label">Step 1 — Discord Bot Credentials</div>
+
+                <div class="field-group">
+                    <label for="discord_token">Bot Token <span class="req">*</span></label>
+                    <div class="token-row">
+                        <input type="password" id="discord_token" name="discord_token"
+                               placeholder="Paste your bot token here" required autocomplete="off">
+                        <button type="button" id="verify-btn" class="btn-secondary">Verify</button>
+                    </div>
+                    <span class="field-hint">
+                        <a href="https://discord.com/developers/applications" target="_blank">discord.com/developers</a>
+                        → Your App → Bot → Reset Token
+                    </span>
+                    <div id="verify-result" class="verify-result" style="display:none;"></div>
+                </div>
+
+                <div class="field-group">
+                    <label for="guild_id">Server (Guild) ID <span class="req">*</span></label>
+                    <input type="text" id="guild_id" name="guild_id"
+                           placeholder="e.g. 123456789012345678" pattern="\d+" required>
+                    <span class="field-hint">
+                        In Discord: Settings → Advanced → enable Developer Mode,
+                        then right-click your server → Copy Server ID.
+                    </span>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="setup-section">
+                <div class="setup-step-label">Step 2 — Notification Channels <span class="optional">(optional)</span></div>
+                <p class="section-hint">Right-click a channel in Discord → Copy Channel ID. Leave blank to skip.</p>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label for="mod_log_channel_id">Mod Log Channel ID</label>
+                        <input type="text" id="mod_log_channel_id" name="mod_log_channel_id"
+                               placeholder="0" pattern="\d*">
+                        <span class="field-hint">Medium-severity logs (mutes, kicks)</span>
+                    </div>
+                    <div class="field-group">
+                        <label for="mod_alerts_channel_id">Alerts Channel ID</label>
+                        <input type="text" id="mod_alerts_channel_id" name="mod_alerts_channel_id"
+                               placeholder="0" pattern="\d*">
+                        <span class="field-hint">Severe alerts — bans, nuke events</span>
+                    </div>
+                </div>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label for="admin_role_id">Admin Role ID</label>
+                        <input type="text" id="admin_role_id" name="admin_role_id"
+                               placeholder="0" pattern="\d*">
+                        <span class="field-hint">Role to ping on Severe alerts</span>
+                    </div>
+                    <div class="field-group">
+                        <label for="muted_role_id">Muted Role ID</label>
+                        <input type="text" id="muted_role_id" name="muted_role_id"
+                               placeholder="0" pattern="\d*">
+                        <span class="field-hint">Fallback (leave blank for Discord timeouts)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="setup-section">
+                <div class="setup-step-label">Step 3 — Dashboard Password <span class="req">*</span></div>
+                <p class="section-hint">This protects your dashboard. Choose something strong and save it somewhere.</p>
+
+                <div class="field-row">
+                    <div class="field-group">
+                        <label for="dashboard_password">Password</label>
+                        <input type="password" id="dashboard_password" name="dashboard_password"
+                               placeholder="Choose a password" required autocomplete="new-password">
+                    </div>
+                    <div class="field-group">
+                        <label for="confirm_password">Confirm Password</label>
+                        <input type="password" id="confirm_password" name="confirm_password"
+                               placeholder="Repeat password" required autocomplete="new-password">
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-launch" id="launch-btn">
+                🚀 &nbsp;Start Bot
+            </button>
+
+        </form>
+
+    </div>
+</div>
+
+<script>
+// Token verify button
+document.getElementById('verify-btn').addEventListener('click', function() {
+    var token = document.getElementById('discord_token').value.trim();
+    var result = document.getElementById('verify-result');
+    if (!token) { return; }
+    this.textContent = '…';
+    this.disabled = true;
+    var btn = this;
+    var form = new FormData();
+    form.append('token', token);
+    fetch('/api/verify-token', { method: 'POST', body: form })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            result.style.display = 'block';
+            if (data.ok) {
+                result.className = 'verify-result verify-ok';
+                result.textContent = '✅ Valid token — bot: ' + data.username + ' (' + data.id + ')';
+            } else {
+                result.className = 'verify-result verify-fail';
+                result.textContent = '❌ ' + (data.error || 'Invalid token');
+            }
+        })
+        .catch(function() {
+            result.style.display = 'block';
+            result.className = 'verify-result verify-fail';
+            result.textContent = '❌ Could not reach Discord API';
+        })
+        .finally(function() {
+            btn.textContent = 'Verify';
+            btn.disabled = false;
+        });
+});
+
+// Show spinner on launch
+document.getElementById('setup-form').addEventListener('submit', function() {
+    var btn = document.getElementById('launch-btn');
+    btn.textContent = '⏳  Starting bot…';
+    btn.disabled = true;
+});
+</script>
+</body>
+</html>

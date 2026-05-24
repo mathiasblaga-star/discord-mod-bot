@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+import local_config
 import shared_state
 from config import DB_PATH
 from database import (
@@ -28,18 +29,13 @@ from database import (
 SESSION_COOKIE = "dashboard_session"
 SESSION_MAX_AGE = 3600  # 1 hour
 
-DASHBOARD_SECRET = os.getenv("DASHBOARD_SECRET")
-if not DASHBOARD_SECRET:
-    raise RuntimeError(
-        "dashboard.app imported but DASHBOARD_SECRET is not set. "
-        "bot.py should check the env var before importing this module."
-    )
-
-serializer = URLSafeTimedSerializer(DASHBOARD_SECRET, salt="dashboard-session")
-
 BASE_DIR = Path(__file__).parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 def _format_ts(ts: int) -> str:
     return datetime.datetime.fromtimestamp(
@@ -48,6 +44,39 @@ def _format_ts(ts: int) -> str:
 
 
 templates.env.filters["ts"] = _format_ts
+
+# Lazy serializer — re-created when the secret changes (e.g. right after setup).
+_serializer_cache: tuple[str, URLSafeTimedSerializer] | None = None
+
+
+def _get_serializer() -> URLSafeTimedSerializer | None:
+    global _serializer_cache
+    secret = local_config.dashboard_secret()
+    if not secret:
+        return None
+    if _serializer_cache is None or _serializer_cache[0] != secret:
+        _serializer_cache = (secret, URLSafeTimedSerializer(secret, salt="dashboard-session"))
+    return _serializer_cache[1]
+
+
+def _valid_session(request: Request) -> bool:
+    ser = _get_serializer()
+    if ser is None:
+        return False
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if not cookie:
+        return False
+    try:
+        ser.loads(cookie, max_age=SESSION_MAX_AGE)
+        return True
+    except (BadSignature, SignatureExpired):
+        return False
+
+
+def _bot_online() -> bool:
+    b = shared_state.bot_instance
+    return b is not None and b.is_ready()
+
 
 # Config field groups for the editable form
 CONFIG_GROUPS = [
@@ -82,41 +111,111 @@ CONFIG_GROUPS = [
     ]),
 ]
 
-# Boolean toggles rendered as checkboxes (stored as 0/1 integers)
 BOOL_FIELDS = {"block_invites", "block_phishing"}
 
-
-def _valid_session(request: Request) -> bool:
-    cookie = request.cookies.get(SESSION_COOKIE)
-    if not cookie:
-        return False
-    try:
-        serializer.loads(cookie, max_age=SESSION_MAX_AGE)
-        return True
-    except (BadSignature, SignatureExpired):
-        return False
-
-
-def _bot_online() -> bool:
-    b = shared_state.bot_instance
-    return b is not None and b.is_ready()
-
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
 
 app = FastAPI(title="Mod Bot Dashboard", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+_ALWAYS_PUBLIC = {"/login", "/logout", "/favicon.ico", "/setup", "/api/status", "/api/verify-token"}
 
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    if path.startswith("/static") or path in ("/login", "/logout", "/favicon.ico", "/api/status"):
+    if path.startswith("/static") or path in _ALWAYS_PUBLIC or path.startswith("/api/"):
         return await call_next(request)
+
+    # If setup is not done, redirect everything to the setup wizard.
+    if not local_config.is_setup_complete() and not local_config.is_railway_mode():
+        return RedirectResponse("/setup", status_code=303)
+
     if not _valid_session(request):
         return RedirectResponse("/login", status_code=303)
+
     return await call_next(request)
 
 
-# ---------------- Auth routes ------------------------------------------
+# ---------------------------------------------------------------------------
+# Setup wizard
+# ---------------------------------------------------------------------------
+
+@app.get("/setup")
+async def setup_form(request: Request):
+    # Already configured — go straight to login.
+    if local_config.is_setup_complete() or local_config.is_railway_mode():
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request, "setup.html", {"error": None})
+
+
+@app.post("/setup")
+async def setup_submit(
+    request: Request,
+    discord_token: str    = Form(...),
+    guild_id: str         = Form(...),
+    mod_log_channel_id: str    = Form("0"),
+    mod_alerts_channel_id: str = Form("0"),
+    admin_role_id: str    = Form("0"),
+    muted_role_id: str    = Form("0"),
+    dashboard_password: str    = Form(...),
+    confirm_password: str      = Form(...),
+):
+    errors = []
+
+    if not discord_token.strip():
+        errors.append("Discord Bot Token is required.")
+    if not guild_id.strip() or not guild_id.strip().isdigit():
+        errors.append("Guild ID must be a valid number.")
+    if not dashboard_password:
+        errors.append("Dashboard password is required.")
+    if dashboard_password != confirm_password:
+        errors.append("Passwords do not match.")
+
+    if errors:
+        return templates.TemplateResponse(
+            request, "setup.html",
+            {"error": " ".join(errors)},
+            status_code=422,
+        )
+
+    def _to_int(val: str) -> int:
+        try:
+            return max(0, int(val.strip()))
+        except (ValueError, AttributeError):
+            return 0
+
+    local_config.save({
+        "discord_token":        discord_token.strip(),
+        "guild_id":             _to_int(guild_id),
+        "mod_log_channel_id":   _to_int(mod_log_channel_id),
+        "mod_alerts_channel_id": _to_int(mod_alerts_channel_id),
+        "admin_role_id":        _to_int(admin_role_id),
+        "muted_role_id":        _to_int(muted_role_id),
+        "dashboard_secret":     dashboard_password,
+        "setup_complete":       True,
+    })
+
+    # Signal bot.py's main() to start the Discord bot.
+    shared_state.setup_complete_event.set()
+
+    # Log the user in automatically.
+    ser = _get_serializer()
+    session_token = ser.dumps("owner") if ser else ""
+    response = RedirectResponse("/", status_code=303)
+    if session_token:
+        response.set_cookie(
+            SESSION_COOKIE, session_token,
+            max_age=SESSION_MAX_AGE, httponly=True, samesite="lax",
+        )
+    return response
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
 
 @app.get("/login")
 async def login_form(request: Request):
@@ -125,14 +224,14 @@ async def login_form(request: Request):
 
 @app.post("/login")
 async def login_submit(request: Request, password: str = Form(...)):
-    if password == DASHBOARD_SECRET:
-        token = serializer.dumps("owner")
+    secret = local_config.dashboard_secret()
+    if secret and password == secret:
+        ser = _get_serializer()
+        token = ser.dumps("owner")
         response = RedirectResponse("/", status_code=303)
         response.set_cookie(
             SESSION_COOKIE, token,
-            max_age=SESSION_MAX_AGE,
-            httponly=True,
-            samesite="lax",
+            max_age=SESSION_MAX_AGE, httponly=True, samesite="lax",
         )
         return response
     return templates.TemplateResponse(
@@ -154,7 +253,9 @@ async def favicon():
     return Response(status_code=204)
 
 
-# ---------------- API --------------------------------------------------
+# ---------------------------------------------------------------------------
+# API
+# ---------------------------------------------------------------------------
 
 @app.get("/api/status")
 async def api_status():
@@ -164,7 +265,27 @@ async def api_status():
     return JSONResponse({"online": online, "guilds": guilds})
 
 
-# ---------------- Pages ------------------------------------------------
+@app.post("/api/verify-token")
+async def api_verify_token(token: str = Form(...)):
+    """Quick check that a bot token is valid against the Discord API."""
+    try:
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "https://discord.com/api/v10/users/@me",
+                headers={"Authorization": f"Bot {token.strip()}"},
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return JSONResponse({"ok": True, "username": data.get("username", "Bot"), "id": data.get("id")})
+                return JSONResponse({"ok": False, "error": f"Discord returned HTTP {resp.status}"})
+    except Exception as exc:
+        return JSONResponse({"ok": False, "error": str(exc)})
+
+
+# ---------------------------------------------------------------------------
+# Pages
+# ---------------------------------------------------------------------------
 
 @app.get("/")
 async def home(request: Request):
@@ -174,15 +295,13 @@ async def home(request: Request):
 
         cutoff = int(time.time()) - 86400
         async with db.execute(
-            "SELECT COUNT(*) FROM infractions WHERE timestamp >= ?",
-            (cutoff,),
+            "SELECT COUNT(*) FROM infractions WHERE timestamp >= ?", (cutoff,),
         ) as cur:
             recent = (await cur.fetchone())[0]
 
         async with db.execute(
             "SELECT user_id, COUNT(*) AS c FROM infractions "
-            "WHERE user_id != 0 "
-            "GROUP BY user_id ORDER BY c DESC LIMIT 5"
+            "WHERE user_id != 0 GROUP BY user_id ORDER BY c DESC LIMIT 5"
         ) as cur:
             top_users = await cur.fetchall()
 
@@ -197,8 +316,6 @@ async def home(request: Request):
 
     b = shared_state.bot_instance
     online = b is not None and b.is_ready()
-    status = "Online" if online else "Offline"
-    guild_count = len(b.guilds) if online else 0
 
     return templates.TemplateResponse(request, "index.html", {
         "total": total,
@@ -207,23 +324,20 @@ async def home(request: Request):
         "breakdown": breakdown,
         "labels": labels,
         "counts": counts,
-        "status": status,
-        "guild_count": guild_count,
+        "status": "Online" if online else "Offline",
+        "guild_count": len(b.guilds) if online else 0,
     })
 
 
 @app.get("/guilds")
-async def guilds(request: Request):
+async def guilds_page(request: Request):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT guild_id, COUNT(*) AS c, MAX(timestamp) "
             "FROM infractions GROUP BY guild_id ORDER BY c DESC"
         ) as cur:
             rows = await cur.fetchall()
-
-    return templates.TemplateResponse(request, "guilds.html", {
-        "guilds": rows,
-    })
+    return templates.TemplateResponse(request, "guilds.html", {"guilds": rows})
 
 
 @app.get("/guilds/{guild_id}")
@@ -235,13 +349,10 @@ async def guild_detail(request: Request, guild_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT user_id, offence_type, severity, action_taken, timestamp "
-            "FROM infractions WHERE guild_id = ? "
-            "ORDER BY timestamp DESC LIMIT 50",
+            "FROM infractions WHERE guild_id = ? ORDER BY timestamp DESC LIMIT 50",
             (guild_id,),
         ) as cur:
             infractions = await cur.fetchall()
-
-    flash = request.query_params.get("flash")
 
     return templates.TemplateResponse(request, "guild.html", {
         "guild_id": guild_id,
@@ -252,7 +363,7 @@ async def guild_detail(request: Request, guild_id: int):
         "slurs": slurs,
         "infractions": infractions,
         "bot_online": _bot_online(),
-        "flash": flash,
+        "flash": request.query_params.get("flash"),
     })
 
 
@@ -261,25 +372,24 @@ async def user_detail(request: Request, user_id: int):
     async with aiosqlite.connect(DB_PATH) as db:
         async with db.execute(
             "SELECT guild_id, offence_type, severity, action_taken, timestamp "
-            "FROM infractions WHERE user_id = ? "
-            "ORDER BY timestamp DESC",
+            "FROM infractions WHERE user_id = ? ORDER BY timestamp DESC",
             (user_id,),
         ) as cur:
             infractions = await cur.fetchall()
-
     return templates.TemplateResponse(request, "user.html", {
         "user_id": user_id,
         "infractions": infractions,
     })
 
 
-# ---------------- Guild config -----------------------------------------
+# ---------------------------------------------------------------------------
+# Guild config
+# ---------------------------------------------------------------------------
 
 @app.post("/guilds/{guild_id}/config")
 async def guild_save_config(guild_id: int, request: Request):
     form = await request.form()
     updates: dict[str, int] = {}
-
     for key in GUILD_CONFIG_DEFAULTS:
         if key in BOOL_FIELDS:
             updates[key] = 1 if form.get(key) else 0
@@ -288,7 +398,6 @@ async def guild_save_config(guild_id: int, request: Request):
                 updates[key] = int(form[key])
             except (ValueError, TypeError):
                 raise HTTPException(400, f"Invalid value for {key}")
-
     await set_guild_config(guild_id, **updates)
     return RedirectResponse(f"/guilds/{guild_id}?flash=config_saved", status_code=303)
 
@@ -299,7 +408,9 @@ async def guild_reset_config(guild_id: int):
     return RedirectResponse(f"/guilds/{guild_id}?flash=config_reset", status_code=303)
 
 
-# ---------------- Slur list --------------------------------------------
+# ---------------------------------------------------------------------------
+# Slur list
+# ---------------------------------------------------------------------------
 
 @app.post("/guilds/{guild_id}/slurs/add")
 async def guild_add_slur(guild_id: int, slur: str = Form(...)):
@@ -313,10 +424,11 @@ async def guild_remove_slur(guild_id: int, slur: str = Form(...)):
     return RedirectResponse(f"/guilds/{guild_id}?flash=slur_removed#slurs", status_code=303)
 
 
-# ---------------- Mod actions ------------------------------------------
+# ---------------------------------------------------------------------------
+# Mod actions
+# ---------------------------------------------------------------------------
 
 def _require_bot(guild_id: int):
-    """Return (bot, guild) or raise HTTPException."""
     b = shared_state.bot_instance
     if b is None or not b.is_ready():
         raise HTTPException(503, "Bot is offline — cannot perform Discord actions")
@@ -332,7 +444,7 @@ async def guild_unban(guild_id: int, user_id: str = Form(...)):
     try:
         await guild.unban(discord.Object(id=int(user_id)), reason="Dashboard unban")
     except discord.NotFound:
-        pass  # already unbanned — not an error
+        pass
     except discord.HTTPException as e:
         raise HTTPException(502, f"Discord API error: {e}")
     return RedirectResponse(f"/guilds/{guild_id}?flash=unbanned", status_code=303)
@@ -346,7 +458,7 @@ async def guild_unmute(guild_id: int, user_id: str = Form(...)):
         member = guild.get_member(uid) or await guild.fetch_member(uid)
         await member.timeout(None, reason="Dashboard unmute")
     except discord.NotFound:
-        pass  # member left — still clean up DB
+        pass
     except discord.HTTPException as e:
         raise HTTPException(502, f"Discord API error: {e}")
     await remove_mute(uid, guild_id)
@@ -359,5 +471,7 @@ async def guild_toggle_lockdown(guild_id: int, enable: str = Form(...)):
     on = enable == "1"
     from utils.actions import apply_lockdown
     await apply_lockdown(guild, on, reason="Dashboard lockdown toggle")
-    flash = "lockdown_on" if on else "lockdown_off"
-    return RedirectResponse(f"/guilds/{guild_id}?flash={flash}", status_code=303)
+    return RedirectResponse(
+        f"/guilds/{guild_id}?flash={'lockdown_on' if on else 'lockdown_off'}",
+        status_code=303,
+    )

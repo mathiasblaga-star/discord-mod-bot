@@ -5,6 +5,8 @@ task inside bot.py's event loop). A simple module-level variable is safe
 because there is only one thread doing async I/O.
 """
 from __future__ import annotations
+
+import asyncio
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,3 +14,7 @@ if TYPE_CHECKING:
 
 # Set to the live Bot instance once it is created; cleared on crash/restart.
 bot_instance: "Bot | None" = None
+
+# Fired by the /setup endpoint once credentials are saved.
+# main() awaits this before starting the bot for the first time.
+setup_complete_event: asyncio.Event = asyncio.Event()
