@@ -30,7 +30,7 @@ jobs:
       - name: Build exe
         run: pyinstaller build.spec
 
-      - name: Upload Windows artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ModBot-Windows
@@ -66,9 +66,54 @@ jobs:
           cd dist
           zip -r ModBot-macOS.zip ModBot.app
 
-      - name: Upload macOS artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ModBot-macOS
           path: dist/ModBot-macOS.zip
+          retention-days: 30
+
+  # ── Linux binary ──────────────────────────────────────────────────────────
+  build-linux:
+    name: Linux (binary)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            libsecret-1-dev \
+            dbus-x11 \
+            upx-ucl
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build binary
+        run: pyinstaller build.spec
+
+      - name: Rename and zip binary
+        run: |
+          mv dist/ModBot dist/ModBot-Linux
+          cd dist
+          zip ModBot-Linux.zip ModBot-Linux
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModBot-Linux
+          path: dist/ModBot-Linux.zip
           retention-days: 30
