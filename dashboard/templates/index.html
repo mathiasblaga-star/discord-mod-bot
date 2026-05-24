@@ -6,7 +6,13 @@
 <div class="stat-grid">
     <div class="stat">
         <div class="stat-label">Bot status</div>
-        <div class="stat-value status-online">{{ status }}</div>
+        <div class="stat-value {% if status == 'Online' %}status-online{% else %}status-offline{% endif %}" id="bot-status">
+            {{ status }}
+        </div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Guilds</div>
+        <div class="stat-value" id="guild-count">{{ guild_count }}</div>
     </div>
     <div class="stat">
         <div class="stat-label">Total infractions</div>
@@ -73,4 +79,23 @@
         {% endif %}
     </section>
 </div>
+
+<script>
+// Poll /api/status every 30 seconds and update the status indicator live
+(function() {
+    function refresh() {
+        fetch('/api/status')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var el = document.getElementById('bot-status');
+                var gc = document.getElementById('guild-count');
+                el.textContent = data.online ? 'Online' : 'Offline';
+                el.className = 'stat-value ' + (data.online ? 'status-online' : 'status-offline');
+                if (gc) gc.textContent = data.guilds;
+            })
+            .catch(function() {});
+    }
+    setInterval(refresh, 30000);
+})();
+</script>
 {% endblock %}

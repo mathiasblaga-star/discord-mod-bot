@@ -2,22 +2,137 @@
 {% block title %}Guild {{ guild_id }} — Mod Bot Dashboard{% endblock %}
 {% block content %}
 <p><a href="/guilds" class="back">&larr; All guilds</a></p>
-<h1>Guild {{ guild_id }}</h1>
+<h1>Guild <code>{{ guild_id }}</code></h1>
 
-<section>
-    <h2>Configuration <span class="muted">({{ config_source }})</span></h2>
-    <table class="config">
-        <tbody>
-            {% for key, value in config.items() %}
-            <tr>
-                <th>{{ key }}</th>
-                <td>{{ value }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+{% if flash %}
+<div class="flash flash-{{ flash }}">
+    {% if flash == "config_saved" %}✅ Configuration saved.
+    {% elif flash == "config_reset" %}✅ Configuration reset to defaults.
+    {% elif flash == "slur_added" %}✅ Slur added.
+    {% elif flash == "slur_removed" %}✅ Slur removed.
+    {% elif flash == "unbanned" %}✅ User unbanned.
+    {% elif flash == "unmuted" %}✅ User unmuted.
+    {% elif flash == "lockdown_on" %}🔒 Lockdown enabled — all channels locked.
+    {% elif flash == "lockdown_off" %}✅ Lockdown lifted — channels unlocked.
+    {% else %}✅ Done.
+    {% endif %}
+</div>
+{% endif %}
+
+{% if not bot_online %}
+<div class="flash flash-warn">⚠️ Bot is offline. Moderation actions are disabled.</div>
+{% endif %}
+
+<!-- ===== Moderation Actions ===== -->
+<section class="mod-actions-grid">
+
+    <div class="mod-card">
+        <h2>🔒 Lockdown</h2>
+        <p class="muted">Current state:
+            {% if lockdown %}<span class="badge badge-danger">Active</span>
+            {% else %}<span class="badge badge-ok">Off</span>{% endif %}
+        </p>
+        <form method="POST" action="/guilds/{{ guild_id }}/lockdown">
+            {% if lockdown %}
+            <input type="hidden" name="enable" value="0">
+            <button type="submit" {% if not bot_online %}disabled{% endif %}>Lift Lockdown</button>
+            {% else %}
+            <input type="hidden" name="enable" value="1">
+            <button type="submit" class="danger" {% if not bot_online %}disabled{% endif %}>Enable Lockdown</button>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="mod-card">
+        <h2>🔓 Unban User</h2>
+        <p class="muted">Remove a ban by Discord user ID.</p>
+        <form method="POST" action="/guilds/{{ guild_id }}/unban" class="inline-form">
+            <input type="text" name="user_id" placeholder="User ID" pattern="\d+" required {% if not bot_online %}disabled{% endif %}>
+            <button type="submit" {% if not bot_online %}disabled{% endif %}>Unban</button>
+        </form>
+    </div>
+
+    <div class="mod-card">
+        <h2>🔇 Unmute User</h2>
+        <p class="muted">Remove timeout and DB mute entry.</p>
+        <form method="POST" action="/guilds/{{ guild_id }}/unmute" class="inline-form">
+            <input type="text" name="user_id" placeholder="User ID" pattern="\d+" required {% if not bot_online %}disabled{% endif %}>
+            <button type="submit" {% if not bot_online %}disabled{% endif %}>Unmute</button>
+        </form>
+    </div>
+
 </section>
 
+<!-- ===== Slur List ===== -->
+<section id="slurs">
+    <h2>Slur Filter List</h2>
+    {% if slurs %}
+    <div class="slur-list">
+        {% for s in slurs %}
+        <form method="POST" action="/guilds/{{ guild_id }}/slurs/remove" class="slur-chip-form">
+            <input type="hidden" name="slur" value="{{ s }}">
+            <button type="submit" class="slur-chip" title="Remove">{{ s }} ✕</button>
+        </form>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="empty">No custom slurs — using global defaults from config.py.</p>
+    {% endif %}
+    <form method="POST" action="/guilds/{{ guild_id }}/slurs/add" class="inline-form" style="margin-top:0.75rem;">
+        <input type="text" name="slur" placeholder="Add slur…" required>
+        <button type="submit">Add</button>
+    </form>
+</section>
+
+<!-- ===== Config Form ===== -->
+<section>
+    <h2>Configuration</h2>
+    <form method="POST" action="/guilds/{{ guild_id }}/config">
+        {% for group_name, fields in config_groups %}
+        <div class="config-group">
+            <h3>{{ group_name }}</h3>
+            <div class="config-fields">
+                {% for key, label, hint in fields %}
+                <div class="config-field">
+                    <label for="f_{{ key }}">{{ label }}</label>
+                    <input type="number" id="f_{{ key }}" name="{{ key }}"
+                           value="{{ config[key] }}" min="0" step="1">
+                    <span class="hint">{{ hint }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="config-group">
+            <h3>Link Filter</h3>
+            <div class="config-fields">
+                <div class="config-field config-field-check">
+                    <label>
+                        <input type="checkbox" name="block_invites" value="1"
+                               {% if config.block_invites %}checked{% endif %}>
+                        Block Discord invites
+                    </label>
+                    <span class="hint">Delete messages containing discord.gg links</span>
+                </div>
+                <div class="config-field config-field-check">
+                    <label>
+                        <input type="checkbox" name="block_phishing" value="1"
+                               {% if config.block_phishing %}checked{% endif %}>
+                        Block phishing links
+                    </label>
+                    <span class="hint">Delete messages with known phishing domains</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit">Save Changes</button>
+        </div>
+    </form>
+</section>
+
+<!-- ===== Infractions ===== -->
 <section>
     <h2>Last 50 infractions</h2>
     {% if infractions %}
@@ -48,11 +163,12 @@
     {% endif %}
 </section>
 
+<!-- ===== Danger Zone ===== -->
 <section class="danger-zone">
     <h2>Danger Zone</h2>
-    <p>Reset this guild's configuration row in the database. All values revert to defaults.</p>
+    <p>Reset this guild's configuration to defaults. Cannot be undone.</p>
     <form action="/guilds/{{ guild_id }}/reset-config" method="POST"
-          onsubmit="return confirm('Reset config for guild {{ guild_id }}? This cannot be undone.');">
+          onsubmit="return confirm('Reset all config for guild {{ guild_id }}? This cannot be undone.');">
         <button type="submit" class="danger">Reset Config to Defaults</button>
     </form>
 </section>

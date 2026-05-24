@@ -6,6 +6,7 @@ import time
 import discord
 from discord.ext import commands
 
+import shared_state
 from config import GUILD_ID
 from database import init_db
 from keep_alive import keep_alive
@@ -72,13 +73,17 @@ async def main():
 
     token = load_token()
     bot = _make_bot()
-    async with bot:
-        for ext in EXTENSIONS:
-            await bot.load_extension(ext)
-        from utils.views import ReviewView, UndoBanButton
-        bot.add_view(ReviewView())
-        bot.add_dynamic_items(UndoBanButton)
-        await bot.start(token, reconnect=True)
+    shared_state.bot_instance = bot
+    try:
+        async with bot:
+            for ext in EXTENSIONS:
+                await bot.load_extension(ext)
+            from utils.views import ReviewView, UndoBanButton
+            bot.add_view(ReviewView())
+            bot.add_dynamic_items(UndoBanButton)
+            await bot.start(token, reconnect=True)
+    finally:
+        shared_state.bot_instance = None
 
 
 if __name__ == "__main__":

@@ -222,3 +222,166 @@ button.danger:hover { background: #ff5c5c; }
     outline: none;
     border-color: var(--accent);
 }
+
+/* Status */
+.status-offline { color: var(--danger); }
+
+/* Flash messages */
+.flash {
+    padding: 0.65rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1.25rem;
+    font-size: 0.95rem;
+    background: rgba(67,181,129,0.12);
+    border: 1px solid rgba(67,181,129,0.35);
+    color: var(--ok);
+}
+.flash-warn, .flash-lockdown_on {
+    background: rgba(250,166,26,0.12);
+    border-color: rgba(250,166,26,0.35);
+    color: var(--warn);
+}
+
+/* Mod action cards */
+.mod-actions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+.mod-card {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+}
+.mod-card h2 { margin-top: 0; font-size: 1rem; }
+
+/* Inline input + button form */
+.inline-form {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.inline-form input[type="text"] {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.9rem;
+}
+.inline-form input[type="text"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+input:disabled, button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+.badge-ok     { background: rgba(67,181,129,0.15); color: var(--ok); }
+.badge-danger { background: rgba(240,71,71,0.15);  color: var(--danger); }
+.badge-warn   { background: rgba(250,166,26,0.15); color: var(--warn); }
+
+/* Slur chips */
+.slur-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+}
+.slur-chip-form { margin: 0; }
+.slur-chip {
+    background: rgba(114,137,218,0.15);
+    color: var(--accent-hi);
+    border: 1px solid rgba(114,137,218,0.35);
+    border-radius: 20px;
+    padding: 0.2rem 0.7rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+}
+.slur-chip:hover {
+    background: rgba(240,71,71,0.18);
+    color: var(--danger);
+    border-color: rgba(240,71,71,0.4);
+}
+
+/* Config form */
+section { margin-bottom: 2rem; }
+.config-group {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+.config-group h3 {
+    margin: 0 0 0.75rem;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+}
+.config-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+}
+.config-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.config-field label {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--text);
+}
+.config-field input[type="number"] {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.9rem;
+    width: 100%;
+}
+.config-field input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.config-field-check {
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.config-field-check label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+.config-field-check input[type="checkbox"] {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--accent);
+}
+.hint {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+}
+.form-actions {
+    margin-top: 1rem;
+}
+
