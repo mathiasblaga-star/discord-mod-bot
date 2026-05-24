@@ -61,12 +61,14 @@ async def main():
     if os.getenv("DASHBOARD_SECRET"):
         import uvicorn
         from dashboard.app import app as dashboard_app
-        port = int(os.getenv("DASHBOARD_PORT", "8080"))
+        # Bind to 0.0.0.0 on Railway's $PORT so the dashboard is publicly
+        # accessible. Fall back to DASHBOARD_PORT then 8080 for local dev.
+        port = int(os.getenv("PORT", os.getenv("DASHBOARD_PORT", "8080")))
         uvicorn_config = uvicorn.Config(
-            dashboard_app, host="127.0.0.1", port=port, log_level="warning",
+            dashboard_app, host="0.0.0.0", port=port, log_level="warning",
         )
         asyncio.create_task(uvicorn.Server(uvicorn_config).serve())
-        log.info("Dashboard available at http://127.0.0.1:%d", port)
+        log.info("Dashboard available at http://0.0.0.0:%d", port)
 
     token = load_token()
     bot = _make_bot()
@@ -80,7 +82,10 @@ async def main():
 
 
 if __name__ == "__main__":
-    keep_alive()
+    # When the dashboard is enabled it serves as the public web server, so
+    # don't also start the plain Flask keep-alive (they'd clash on $PORT).
+    if not os.getenv("DASHBOARD_SECRET"):
+        keep_alive()
     while True:
         try:
             asyncio.run(main())
