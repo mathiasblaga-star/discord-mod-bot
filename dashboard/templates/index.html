@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Overview — Mod Bot Dashboard{% endblock %}
+{% block content %}
+<h1>Overview</h1>
+
+<div class="stat-grid">
+    <div class="stat">
+        <div class="stat-label">Bot status</div>
+        <div class="stat-value status-online">{{ status }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Total infractions</div>
+        <div class="stat-value">{{ total }}</div>
+    </div>
+    <div class="stat">
+        <div class="stat-label">Last 24 hours</div>
+        <div class="stat-value">{{ recent }}</div>
+    </div>
+</div>
+
+<div class="two-col">
+    <section>
+        <h2>Top offenders</h2>
+        {% if top_users %}
+        <table class="sortable">
+            <thead><tr><th>User ID</th><th>Infractions</th></tr></thead>
+            <tbody>
+                {% for uid, count in top_users %}
+                <tr>
+                    <td><a href="/users/{{ uid }}">{{ uid }}</a></td>
+                    <td>{{ count }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty">No infractions yet.</p>
+        {% endif %}
+    </section>
+
+    <section>
+        <h2>Offence breakdown</h2>
+        {% if breakdown %}
+        <canvas id="breakdown-chart" height="240"></canvas>
+        <script>
+            (function() {
+                var ctx = document.getElementById('breakdown-chart');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: {{ labels | tojson }},
+                        datasets: [{
+                            data: {{ counts | tojson }},
+                            backgroundColor: [
+                                '#7289da', '#43b581', '#faa61a', '#f04747',
+                                '#9b59b6', '#1abc9c', '#e67e22', '#34495e',
+                                '#ff80ab', '#26c6da', '#aed581', '#ffd54f'
+                            ],
+                            borderColor: '#1a1a2e',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: { labels: { color: '#e0e0e0' } }
+                        }
+                    }
+                });
+            })();
+        </script>
+        {% else %}
+        <p class="empty">No data to chart.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

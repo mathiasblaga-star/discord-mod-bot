@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}User {{ user_id }} — Mod Bot Dashboard{% endblock %}
+{% block content %}
+<p><a href="/" class="back">&larr; Home</a></p>
+<h1>User {{ user_id }}</h1>
+<p class="muted">All infractions across every guild.</p>
+
+{% if infractions %}
+<table class="sortable">
+    <thead>
+        <tr>
+            <th>Guild ID</th>
+            <th>Offence</th>
+            <th>Severity</th>
+            <th>Action</th>
+            <th>Timestamp (UTC)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for gid, offence, severity, action, ts in infractions %}
+        <tr>
+            <td><a href="/guilds/{{ gid }}">{{ gid }}</a></td>
+            <td>{{ offence }}</td>
+            <td><span class="sev sev-{{ severity|lower }}">{{ severity }}</span></td>
+            <td>{{ action }}</td>
+            <td>{{ ts | ts }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">No infractions on record for this user.</p>
+{% endif %}
+{% endblock %}

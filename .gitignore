@@ -1,0 +1,10 @@
+.env
+token.enc
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+data/*.db
+data/backups/
+.venv/
+venv/

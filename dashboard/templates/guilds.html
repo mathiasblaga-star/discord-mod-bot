@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Guilds — Mod Bot Dashboard{% endblock %}
+{% block content %}
+<h1>Guilds with activity</h1>
+{% if guilds %}
+<table class="sortable">
+    <thead>
+        <tr>
+            <th>Guild ID</th>
+            <th>Total infractions</th>
+            <th>Last activity (UTC)</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for gid, count, last_ts in guilds %}
+        <tr>
+            <td>{{ gid }}</td>
+            <td>{{ count }}</td>
+            <td>{{ last_ts | ts }}</td>
+            <td><a href="/guilds/{{ gid }}" class="action">Open</a></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="empty">No guild activity recorded yet.</p>
+{% endif %}
+{% endblock %}

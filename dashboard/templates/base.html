@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Mod Bot Dashboard{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+</head>
+<body>
+    {% block nav %}
+    <nav>
+        <div class="nav-inner">
+            <a href="/" class="brand">Mod Bot</a>
+            <div class="links">
+                <a href="/">Home</a>
+                <a href="/guilds">Guilds</a>
+                <a href="/logout" class="logout">Logout</a>
+            </div>
+        </div>
+    </nav>
+    {% endblock %}
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <script>
+        // Click-to-sort for any table.sortable
+        document.querySelectorAll('table.sortable th').forEach(function(th) {
+            th.style.cursor = 'pointer';
+            th.addEventListener('click', function() {
+                var table = th.closest('table');
+                var tbody = table.querySelector('tbody');
+                if (!tbody) return;
+                var rows = Array.from(tbody.querySelectorAll('tr'));
+                var idx = Array.from(th.parentElement.children).indexOf(th);
+                var asc = th.dataset.sortDir !== 'asc';
+                th.dataset.sortDir = asc ? 'asc' : 'desc';
+                rows.sort(function(a, b) {
+                    var av = (a.children[idx].textContent || '').trim();
+                    var bv = (b.children[idx].textContent || '').trim();
+                    var an = Number(av);
+                    var bn = Number(bv);
+                    var cmp = (!isNaN(an) && !isNaN(bn) && av !== '' && bv !== '')
+                        ? an - bn
+                        : av.localeCompare(bv);
+                    return asc ? cmp : -cmp;
+                });
+                rows.forEach(function(r) { tbody.appendChild(r); });
+            });
+        });
+    </script>
+</body>
+</html>

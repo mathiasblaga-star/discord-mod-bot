@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Guild {{ guild_id }} — Mod Bot Dashboard{% endblock %}
+{% block content %}
+<p><a href="/guilds" class="back">&larr; All guilds</a></p>
+<h1>Guild {{ guild_id }}</h1>
+
+<section>
+    <h2>Configuration <span class="muted">({{ config_source }})</span></h2>
+    <table class="config">
+        <tbody>
+            {% for key, value in config.items() %}
+            <tr>
+                <th>{{ key }}</th>
+                <td>{{ value }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>Last 50 infractions</h2>
+    {% if infractions %}
+    <table class="sortable">
+        <thead>
+            <tr>
+                <th>User ID</th>
+                <th>Offence</th>
+                <th>Severity</th>
+                <th>Action</th>
+                <th>Timestamp (UTC)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for uid, offence, severity, action, ts in infractions %}
+            <tr>
+                <td><a href="/users/{{ uid }}">{{ uid }}</a></td>
+                <td>{{ offence }}</td>
+                <td><span class="sev sev-{{ severity|lower }}">{{ severity }}</span></td>
+                <td>{{ action }}</td>
+                <td>{{ ts | ts }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No infractions recorded for this guild.</p>
+    {% endif %}
+</section>
+
+<section class="danger-zone">
+    <h2>Danger Zone</h2>
+    <p>Reset this guild's configuration row in the database. All values revert to defaults.</p>
+    <form action="/guilds/{{ guild_id }}/reset-config" method="POST"
+          onsubmit="return confirm('Reset config for guild {{ guild_id }}? This cannot be undone.');">
+        <button type="submit" class="danger">Reset Config to Defaults</button>
+    </form>
+</section>
+{% endblock %}
